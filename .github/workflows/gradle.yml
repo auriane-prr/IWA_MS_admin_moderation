@@ -42,14 +42,14 @@ jobs:
         run: |
           docker build -t iwa_ms_admin_moderation-app-1:latest -f Dockerfile .
 
-            # 6. Déployer sur Dokku
-      - name: Debug SSH Configuration
+      # 6. Déployer sur Dokku
+      - name: Debug SSH Setup
         run: |
-          echo "SSH PRIVATE KEY:"
-          echo "${SSH_PRIVATE_KEY}" | head -n 5 # Affiche les 5 premières lignes (sans exposer toute la clé)
-          echo "Checking ~/.ssh permissions"
-          ls -la ~/.ssh || echo "SSH directory not found"
-          echo "Known hosts content:"
+          echo "Checking SSH directory"
+          ls -la ~/.ssh
+          echo "Checking SSH private key file"
+          cat ~/.ssh/id_rsa || echo "Private key not found or unreadable"
+          echo "Checking known_hosts file"
           cat ~/.ssh/known_hosts || echo "Known hosts file not found"
 
       - name: Deploy App to Dokku
@@ -58,6 +58,7 @@ jobs:
           DOKKU_APP: iwa_ms_admin_moderation
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
+          rm -rf ~/.ssh
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
@@ -75,4 +76,3 @@ jobs:
           ssh dokku@$DOKKU_HOST config:set $DOKKU_APP SPRING_DATASOURCE_USERNAME=postgres SPRING_DATASOURCE_PASSWORD=postgres
           docker save iwa_ms_admin_moderation-app-1:latest | bzip2 | ssh dokku@$DOKKU_HOST docker-import $DOKKU_APP
           ssh dokku@$DOKKU_HOST ps:restart $DOKKU_APP
-      
