@@ -42,43 +42,54 @@ jobs:
         run: |
           docker build -t iwa_ms_admin_moderation-app-1:latest -f Dockerfile .
 
-      # 6. Configurer SSH et déboguer
+      # 6. Valider la clé privée SSH
+      - name: Validate SSH Private Key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          echo "Validating private key format"
+          echo "${SSH_PRIVATE_KEY}" | ssh-keygen -lf /dev/stdin || { echo "Private key validation failed"; exit 1; }
+
+      # 7. Configurer SSH et déboguer
       - name: Configure SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           echo "Step: Configuring SSH"
-          # Supprime toute configuration résiduelle et recrée le répertoire `.ssh`
+
+          # Supprimer toute configuration SSH résiduelle
           rm -rf ~/.ssh
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
-          # Ajoute la clé privée
-          echo "${SSH_PRIVATE_KEY}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+          # Ajouter la clé privée
+          echo "${SSH_PRIVATE_KEY}" > ~/.ssh/id_rsa || { echo "Failed to write private key"; exit 1; }
+          chmod 600 ~/.ssh/id_rsa || { echo "Failed to set permissions on private key"; exit 1; }
 
-          # Ajoute le serveur Dokku à known_hosts
-          ssh-keyscan -H ${{ secrets.DOKKU_HOST }} >> ~/.ssh/known_hosts
+          # Ajouter le serveur Dokku à known_hosts
+          ssh-keyscan -H ${{ secrets.DOKKU_HOST }} >> ~/.ssh/known_hosts || { echo "Failed to add Dokku host to known_hosts"; exit 1; }
           chmod 644 ~/.ssh/known_hosts
 
           # Diagnostics
           echo "Step: Debugging SSH Configuration"
           echo "Checking SSH directory contents"
-          ls -la ~/.ssh
-          echo "Checking private key"
-          cat ~/.ssh/id_rsa || echo "Private key is not found or unreadable"
-          echo "Checking known_hosts"
+          ls -la ~/.ssh || echo "Failed to list ~/.ssh directory"
+
+          echo "Checking private key content"
+          cat ~/.ssh/id_rsa || echo "Private key not found or unreadable"
+
+          echo "Checking known_hosts file"
           cat ~/.ssh/known_hosts || echo "Known hosts file is missing"
 
-      # 7. Tester la connexion SSH
+      # 8. Tester la connexion SSH
       - name: Test SSH Connection
         env:
           DOKKU_HOST: ${{ secrets.DOKKU_HOST }}
         run: |
           echo "Step: Testing SSH Connection"
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no dokku@${{ secrets.DOKKU_HOST }} apps:list || echo "SSH connection failed"
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no dokku@${{ secrets.DOKKU_HOST }} apps:list || { echo "SSH connection failed"; exit 1; }
 
-      # 8. Déployer l'application sur Dokku
+      # 9. Déployer l'application sur Dokku
       - name: Deploy App to Dokku
         env:
           DOKKU_HOST: ${{ secrets.DOKKU_HOST }}
