@@ -59,17 +59,20 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
           echo "${SSH_PRIVATE_KEY}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+
           ssh-keyscan -H $DOKKU_HOST >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+          ssh -o StrictHostKeyChecking=no dokku@$DOKKU_HOST apps:list
 
           ssh dokku@$DOKKU_HOST apps:create $DOKKU_APP || true
-
           ssh dokku@$DOKKU_HOST postgres:create iwa_ms_admin_moderation_db || true
           ssh dokku@$DOKKU_HOST postgres:link iwa_ms_admin_moderation_db $DOKKU_APP || true
-
           ssh dokku@$DOKKU_HOST config:set $DOKKU_APP SPRING_DATASOURCE_USERNAME=postgres SPRING_DATASOURCE_PASSWORD=postgres
-
           docker save iwa_ms_admin_moderation-app-1:latest | bzip2 | ssh dokku@$DOKKU_HOST docker-import $DOKKU_APP
-
           ssh dokku@$DOKKU_HOST ps:restart $DOKKU_APP
+      
