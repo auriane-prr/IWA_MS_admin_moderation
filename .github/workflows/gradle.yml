@@ -42,37 +42,62 @@ jobs:
         run: |
           docker build -t iwa_ms_admin_moderation-app-1:latest -f Dockerfile .
 
-      # 6. Déployer sur Dokku
-      - name: Debug SSH Setup
-        run: |
-          echo "Checking SSH directory"
-          ls -la ~/.ssh
-          echo "Checking SSH private key file"
-          cat ~/.ssh/id_rsa || echo "Private key not found or unreadable"
-          echo "Checking known_hosts file"
-          cat ~/.ssh/known_hosts || echo "Known hosts file not found"
-
-      - name: Deploy App to Dokku
+      # 6. Configurer SSH et déboguer
+      - name: Configure SSH
         env:
-          DOKKU_HOST: ${{ secrets.DOKKU_HOST }}
-          DOKKU_APP: iwa_ms_admin_moderation
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
+          echo "Step: Configuring SSH"
+          # Supprime toute configuration résiduelle et recrée le répertoire `.ssh`
           rm -rf ~/.ssh
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
+          # Ajoute la clé privée
           echo "${SSH_PRIVATE_KEY}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-          ssh-keyscan -H $DOKKU_HOST >> ~/.ssh/known_hosts
+          # Ajoute le serveur Dokku à known_hosts
+          ssh-keyscan -H ${{ secrets.DOKKU_HOST }} >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
-          ssh -o StrictHostKeyChecking=no dokku@$DOKKU_HOST apps:list
+          # Diagnostics
+          echo "Step: Debugging SSH Configuration"
+          echo "Checking SSH directory contents"
+          ls -la ~/.ssh
+          echo "Checking private key"
+          cat ~/.ssh/id_rsa || echo "Private key is not found or unreadable"
+          echo "Checking known_hosts"
+          cat ~/.ssh/known_hosts || echo "Known hosts file is missing"
 
-          ssh dokku@$DOKKU_HOST apps:create $DOKKU_APP || true
-          ssh dokku@$DOKKU_HOST postgres:create iwa_ms_admin_moderation_db || true
-          ssh dokku@$DOKKU_HOST postgres:link iwa_ms_admin_moderation_db $DOKKU_APP || true
-          ssh dokku@$DOKKU_HOST config:set $DOKKU_APP SPRING_DATASOURCE_USERNAME=postgres SPRING_DATASOURCE_PASSWORD=postgres
-          docker save iwa_ms_admin_moderation-app-1:latest | bzip2 | ssh dokku@$DOKKU_HOST docker-import $DOKKU_APP
-          ssh dokku@$DOKKU_HOST ps:restart $DOKKU_APP
+      # 7. Tester la connexion SSH
+      - name: Test SSH Connection
+        env:
+          DOKKU_HOST: ${{ secrets.DOKKU_HOST }}
+        run: |
+          echo "Step: Testing SSH Connection"
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no dokku@${{ secrets.DOKKU_HOST }} apps:list || echo "SSH connection failed"
+
+      # 8. Déployer l'application sur Dokku
+      - name: Deploy App to Dokku
+        env:
+          DOKKU_HOST: ${{ secrets.DOKKU_HOST }}
+          DOKKU_APP: iwa_ms_admin_moderation
+        run: |
+          echo "Step: Deploying Application to Dokku"
+
+          # Créer l'application Dokku si elle n'existe pas
+          ssh dokku@${{ secrets.DOKKU_HOST }} apps:create $DOKKU_APP || true
+
+          # Configurer la base de données PostgreSQL
+          ssh dokku@${{ secrets.DOKKU_HOST }} postgres:create iwa_ms_admin_moderation_db || true
+          ssh dokku@${{ secrets.DOKKU_HOST }} postgres:link iwa_ms_admin_moderation_db $DOKKU_APP || true
+
+          # Configurer les variables d'environnement
+          ssh dokku@${{ secrets.DOKKU_HOST }} config:set $DOKKU_APP SPRING_DATASOURCE_USERNAME=postgres SPRING_DATASOURCE_PASSWORD=postgres
+
+          # Importer l'image Docker dans Dokku
+          docker save iwa_ms_admin_moderation-app-1:latest | bzip2 | ssh dokku@${{ secrets.DOKKU_HOST }} docker-import $DOKKU_APP
+
+          # Redémarrer l'application sur Dokku
+          ssh dokku@${{ secrets.DOKKU_HOST }} ps:restart $DOKKU_APP
