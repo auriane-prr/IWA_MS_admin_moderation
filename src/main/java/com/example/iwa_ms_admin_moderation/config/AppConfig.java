@@ -10,5 +10,5 @@ public class AppConfig {
     @Bean
     public RestTemplate restTemplate() {
         return new RestTemplate();
-    }// pour la communication entre ms
+    }
 }
