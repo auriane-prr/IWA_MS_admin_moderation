@@ -42,7 +42,16 @@ jobs:
         run: |
           docker build -t iwa_ms_admin_moderation-app-1:latest -f Dockerfile .
 
-      # 6. Déployer sur Dokku
+            # 6. Déployer sur Dokku
+      - name: Debug SSH Configuration
+        run: |
+          echo "SSH PRIVATE KEY:"
+          echo "${SSH_PRIVATE_KEY}" | head -n 5 # Affiche les 5 premières lignes (sans exposer toute la clé)
+          echo "Checking ~/.ssh permissions"
+          ls -la ~/.ssh || echo "SSH directory not found"
+          echo "Known hosts content:"
+          cat ~/.ssh/known_hosts || echo "Known hosts file not found"
+
       - name: Deploy App to Dokku
         env:
           DOKKU_HOST: ${{ secrets.DOKKU_HOST }}
